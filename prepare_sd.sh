@@ -62,12 +62,9 @@ read -p "Gateway (e.g. 192.168.1.1): "               GATEWAY
 
 echo ""
 echo "--- VLANs ---"
-echo "    Enter VLAN IPs as a comma-separated list matching your VLAN interface order."
-echo "    Each IP will be assigned to eth0.<vlan_id> in the order you specify."
-echo "    VLAN IDs to configure (edit script to change): 2,3,4,6,7,8"
-read -p "VLAN IPs (e.g. 192.168.2.10,192.168.3.10,...): " INPUT_VLAN_IPS
-IFS=',' read -ra VLAN_IPS <<< "$INPUT_VLAN_IPS"
-VLAN_IDS=(2 3 4 6 7 8)
+echo "    Enter VLAN IPs as a comma-separated list."
+echo "    The 3rd octet of each IP will automatically become the eth0.x interface ID."
+read -p "VLAN IPs (e.g. 192.168.2.10, 192.168.3.10): " INPUT_VLAN_IPS
 
 echo ""
 echo "--- NUT Client ---"
@@ -116,12 +113,20 @@ echo "==> dietpi.txt configured."
 # Build vlans.conf content from prompted VLAN IPs
 # =============================================================================
 VLANS_CONF=""
-for i in "${!VLAN_IDS[@]}"; do
-    VLAN_ID="${VLAN_IDS[$i]}"
-    VLAN_IP="${VLAN_IPS[$i]}"
-    if [[ -n "$VLAN_IP" ]]; then
-        VLAN_IP="$(echo "$VLAN_IP" | tr -d ' ')"
-        VLANS_CONF+="allow-hotplug eth0.${VLAN_ID}\niface eth0.${VLAN_ID} inet static\n  address ${VLAN_IP}\n  netmask ${NETMASK}\n"
+IFS=',' read -ra ADDR_ARRAY <<< "$INPUT_VLAN_IPS"
+
+for ip in "${ADDR_ARRAY[@]}"; do
+    clean_ip=$(echo "$ip" | tr -d ' ')
+    vlan_id=$(echo "$clean_ip" | cut -d. -f3)
+    
+    if [[ -n "$vlan_id" ]]; then
+        # Append literal block with newlines
+        VLANS_CONF+="allow-hotplug eth0.${vlan_id}
+iface eth0.${vlan_id} inet static
+  address ${clean_ip}
+  netmask ${NETMASK}
+
+"
     fi
 done
 
